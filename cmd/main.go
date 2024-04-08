@@ -13,12 +13,15 @@ var (
 	invoicePath string
 	startDate   string
 	endDate     string
+	cardNumber  string
 )
 
 func init() {
 	flag.StringVar(&invoicePath, "file", "", "itaú invoice path to consume")
 	flag.StringVar(&startDate, "start-date", "", "only consume from start-date (02/01/2006)")
 	flag.StringVar(&endDate, "end-date", "", "only consume until end-date (02/01/2006)")
+	flag.StringVar(&cardNumber, "card-number", "", "only consume this card number")
+	// only consume this card number 1820
 	flag.Parse()
 }
 
@@ -46,6 +49,12 @@ func main() {
 
 		itauImportConfigs.EndDate = tEndDate
 	}
+
+	if cardNumber != "" {
+		itauImportConfigs.FinalCardNumber = cardNumber
+	}
+
+	l.Info(fmt.Sprintf("itauImportConfigs:  %s", itauImportConfigs))
 
 	entries, err := internal.GetEntriesFromItauInvoice(itauImportConfigs, invoicePath)
 	if err != nil {

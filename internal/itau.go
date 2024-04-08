@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"strconv"
@@ -11,12 +12,14 @@ import (
 	"github.com/Rhymond/go-money"
 	"github.com/viniciusgabrielfo/organizze-invoice-itau-converter/pkg/category_definer"
 	"github.com/viniciusgabrielfo/organizze-invoice-itau-converter/pkg/model"
+	"github.com/viniciusgabrielfo/organizze-invoice-itau-converter/pkg/tag_definer"
 	"github.com/viniciusgabrielfo/xls"
 )
 
 type ItauImportConfigs struct {
-	StartDate time.Time
-	EndDate   time.Time
+	StartDate       time.Time
+	EndDate         time.Time
+	FinalCardNumber string
 }
 
 func GetEntriesFromItauInvoice(configs *ItauImportConfigs, filePath string) ([]model.Entry, error) {
@@ -34,6 +37,9 @@ func GetEntriesFromItauInvoice(configs *ItauImportConfigs, filePath string) ([]m
 	}
 
 	var isEntry bool
+	var isOtherCoin bool = false
+	var isRightCard bool
+	var lastDate string
 
 	entries := make([]model.Entry, 0)
 
@@ -49,13 +55,38 @@ func GetEntriesFromItauInvoice(configs *ItauImportConfigs, filePath string) ([]m
 		date := row.Col(0)
 		description := row.Col(1)
 
-		if date == "data" && description == "lançamento" {
+		if strings.Contains(date, "final") {
+			substrings := strings.Split(configs.FinalCardNumber, ",")
+			isRightCard = false
+			for _, substring := range substrings {
+				if strings.Contains(date, substring) {
+					// fmt.Println("Card number: ", date)
+					isRightCard = true
+					break
+				}
+			}
+		}
+
+		if isRightCard && date == "data" && description == "lançamento" {
 			isEntry = true
 			continue
 		}
 
 		if isEntry {
-			if date == "" || description == "dólar de conversão" {
+			fmt.Println("Date: ", date, "Description: ", description)
+			if date == "" && !isOtherCoin {
+				continue
+			}
+
+			if isOtherCoin {
+				isOtherCoin = false
+				date = lastDate
+			}
+
+			if description == "dólar de conversão" {
+				fmt.Println("Other coin", date, description)
+				isOtherCoin = true
+				lastDate = date
 				continue
 			}
 
@@ -69,22 +100,24 @@ func GetEntriesFromItauInvoice(configs *ItauImportConfigs, filePath string) ([]m
 				continue
 			}
 
-			value, err := strconv.ParseFloat(row.Col(3), 32)
+			value, err := strconv.ParseFloat(row.Col(3), 64)
 			if err != nil {
 				return entries, err
 			}
 
-			if ok, installments := IsInstallmentPurchase(description); ok {
-				value = value * float64(installments)
-			}
-
+			// if ok, installments := IsInstallmentPurchase(description); ok {
+			// 	value = value * float64(installments)
+			// }
+			// fmt.Println("Value: ", value, date, description)
 			entries = append(entries, model.Entry{
 				Date:        date,
 				Description: description,
 				Category:    category_definer.GetCategoryFromDescription(description),
+				Tag:         tag_definer.GetTagFromDescription(description),
 				Value:       money.NewFromFloat(-value, money.BRL),
 			})
 		}
+
 	}
 
 	return entries, nil

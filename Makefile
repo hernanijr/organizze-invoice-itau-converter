@@ -1,4 +1,5 @@
-invoice_path ?= $(HOME)/Downloads/Fatura-Excel.xls
+invoice_path ?= $(HOME)/Downloads/Fatura-Excel4.xls
+cardNumber = 7804,1249
 
 build:
 	go build -v ./...
@@ -10,7 +11,7 @@ lint:
 	golangci-lint run -v --fix ./...
 
 run-invoice-itau-consumer:
-	go run cmd/main.go --file $(invoice_path)
+	go run cmd/main.go --file $(invoice_path) --card-number $(cardNumber)
 
 up-unoconv:
 	docker buildx build -t unoconv .
